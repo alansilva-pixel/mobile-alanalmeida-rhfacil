@@ -6,9 +6,13 @@ import api from "../../services/API";
 interface Colaborador {
   cpf: string;
   nome: string;
-  cargo: string;
-  salario: number;
+  cargoNome: string;
+  cargoSalario: number;
   criadoEm?: string;
+  email: string;
+  nascimento: string;
+  pis: string;
+  telefone: string;
 }
 
 export default function ColaboradorDetalhe() {
@@ -65,8 +69,12 @@ export default function ColaboradorDetalhe() {
     <View style={styles.container}>
       <Text style={styles.title}>{colaborador.nome}</Text>
       <Text style={styles.text}>CPF: {colaborador.cpf}</Text>
-      <Text style={styles.text}>Cargo: {colaborador.cargo}</Text>
-      <Text style={styles.text}>Salário: R$ {colaborador.salario}</Text>
+      <Text style={styles.text}>Cargo: {colaborador.cargoNome}</Text>
+      <Text style={styles.text}>Salário R$: {colaborador.cargoSalario}</Text>
+      <Text style={styles.text}>E-mail: {colaborador.email}</Text>
+      <Text style={styles.text}>Nascimento:{colaborador.nascimento}</Text>
+      <Text style={styles.text}>Pis: {colaborador.pis}</Text>
+      <Text style={styles.text}>Telefone: {colaborador.telefone}</Text>
       <Text style={styles.text}>
         Data de criação: {new Date(colaborador.criadoEm ?? "").toLocaleDateString("pt-BR")}
       </Text>

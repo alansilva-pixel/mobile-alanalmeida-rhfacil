@@ -1,6 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import api from "../../services/API";
+
+interface Cargo {
+  id: string;
+  nome: string;
+  salario: number;
+}
 
 export default function GerenciarEmpresa() {
   const [balanco, setBalanco] = useState({
@@ -8,24 +23,55 @@ export default function GerenciarEmpresa() {
     totalSalarios: 0,
     mediaSalarial: 0,
   });
+
+  const [cargos, setCargos] = useState<Cargo[]>([]);
   const [novoCargo, setNovoCargo] = useState("");
-  const [cargos, setCargos] = useState<string[]>([]);
+  const [salario, setSalario] = useState("");
+  const [loadingCargos, setLoadingCargos] = useState(false);
 
   useEffect(() => {
-    api
-      .get("/empresa/balanco")
-      .then((res) => setBalanco(res.data))
-      .catch(() => setBalanco({ totalColaboradores: 0, totalSalarios: 0, mediaSalarial: 0 }));
-
-    setCargos(["Desenvolvedor", "Designer", "Gerente"]);
+    buscarBalanco();
+    buscarCargos();
   }, []);
 
-  async function handleAdicionarCargo() {
-    if (!novoCargo) return Alert.alert("Aviso", "Informe o nome do cargo");
+  async function buscarBalanco() {
+    try {
+      const res = await api.get("/empresa/balanco");
+      setBalanco(res.data);
+    } catch (err) {
+      setBalanco({ totalColaboradores: 0, totalSalarios: 0, mediaSalarial: 0 });
+    }
+  }
 
-    setCargos((prev) => [...prev, novoCargo]);
-    setNovoCargo("");
-    Alert.alert("Sucesso", "Cargo cadastrado localmente!");
+  async function buscarCargos() {
+    setLoadingCargos(true);
+    try {
+      const res = await api.get("/lambdaCargos");
+      setCargos(res.data || []);
+    } catch (err) {
+      console.error("Erro ao buscar cargos:", err);
+      setCargos([]);
+    } finally {
+      setLoadingCargos(false);
+    }
+  }
+
+  async function handleAdicionarCargo() {
+    if (!novoCargo || !salario) {
+      return Alert.alert("Aviso", "Informe o nome e o salário do cargo");
+    }
+
+    try {
+      const novo = { nome: novoCargo, salario: parseFloat(salario) };
+      await api.post("/lambdaCargos", novo); 
+      setNovoCargo("");
+      setSalario("");
+      await buscarCargos();
+      Alert.alert("Sucesso", "Cargo cadastrado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao cadastrar cargo:", error);
+      Alert.alert("Erro", "Não foi possível cadastrar o cargo.");
+    }
   }
 
   return (
@@ -34,32 +80,58 @@ export default function GerenciarEmpresa() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>📊 Balanço Geral</Text>
-        <Text style={styles.value}>Total de colaboradores: {balanco.totalColaboradores}</Text>
-        <Text style={styles.value}>Folha total: R$ {balanco.totalSalarios.toFixed(2)}</Text>
-        <Text style={styles.value}>Média salarial: R$ {balanco.mediaSalarial.toFixed(2)}</Text>
+        <Text style={styles.value}>
+          Total de colaboradores: {balanco.totalColaboradores ?? 0}
+        </Text>
+        <Text style={styles.value}>
+          Folha total: R$ {(balanco.totalSalarios ?? 0).toFixed(2)}
+        </Text>
+        <Text style={styles.value}>
+          Média salarial: R$ {(balanco.mediaSalarial ?? 0).toFixed(2)}
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>💼 Cargos Cadastrados</Text>
-        <FlatList
-          data={cargos}
-          keyExtractor={(item) => item}
-          renderItem={({ item }) => <Text style={styles.cargoItem}>• {item}</Text>}
-        />
+
+        {loadingCargos ? (
+          <ActivityIndicator />
+        ) : (
+          <FlatList
+            data={cargos}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Text style={styles.cargoItem}>
+                • {item.nome} — R$ {(item.salario ?? 0).toFixed(2)}
+              </Text>
+            )}
+            ListEmptyComponent={
+              <Text style={{ color: "#94a3b8", fontStyle: "italic" }}>
+                Nenhum cargo cadastrado.
+              </Text>
+            }
+          />
+        )}
       </View>
 
       <TextInput
         style={styles.input}
-        placeholder="Novo cargo"
+        placeholder="Nome do cargo"
         value={novoCargo}
         onChangeText={setNovoCargo}
+        placeholderTextColor={"#999"}
       />
+      <TextInput
+        style={styles.input}
+        placeholder="Salário base (ex: 3500)"
+        keyboardType="numeric"
+        value={salario}
+        onChangeText={setSalario}
+        placeholderTextColor={"#999"}
+      />
+
       <TouchableOpacity style={styles.button} onPress={handleAdicionarCargo}>
         <Text style={styles.buttonText}>Cadastrar Cargo</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.recruitment}>
-        <Text style={styles.recruitmentText}>📋 Recrutamento</Text>
       </TouchableOpacity>
     </View>
   );
@@ -72,9 +144,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: "bold", fontSize: 18 },
   value: { fontSize: 16, color: "#1e293b", marginTop: 5 },
   cargoItem: { fontSize: 15, marginVertical: 3, color: "#475569" },
-  input: { backgroundColor: "white", borderRadius: 8, padding: 10, marginVertical: 8 },
+  input: { backgroundColor: "white", borderRadius: 8, padding: 10, marginVertical: 8, borderWidth:1, borderColor:"#cbd5e1" },
   button: { backgroundColor: "#2563eb", padding: 15, borderRadius: 10, marginTop: 10 },
   buttonText: { color: "white", fontWeight: "bold", textAlign: "center" },
-  recruitment: { marginTop: 20 },
-  recruitmentText: { color: "#64748b", fontStyle: "italic", textAlign: "center" },
 });
