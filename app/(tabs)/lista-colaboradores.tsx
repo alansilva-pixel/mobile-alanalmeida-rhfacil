@@ -9,6 +9,8 @@ interface Colaborador {
   cargo: string;
   salario: number;
   criadoEm?: string;
+  bonus: number;
+  auxilios: number;
 }
 
 export default function ListaColaboradores() {
@@ -32,24 +34,32 @@ export default function ListaColaboradores() {
     buscarColaboradores();
   }, []);
 
-  const renderItem = ({ item }: { item: Colaborador }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() =>
-        router.push({
-          pathname: "/(tabs)/colaborador-detalhe",
-          params: { cpf: item.cpf },
-        })
-      }
-    >
-      <Text style={styles.name}>{item.nome}</Text>
-      <Text style={styles.role}>Cargo: {item.cargo}</Text>
-      <Text style={styles.salary}>Salário: R$ {item.salario.toFixed(2)}</Text>
-      <Text style={styles.date}>
-        Cadastrado em: {new Date(item.criadoEm ?? "").toLocaleDateString("pt-BR")}
-      </Text>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: Colaborador }) => {
+    const bonus = item.bonus || 0;
+    const auxilios = item.auxilios || 0;
+    const totalGanhos = item.salario + bonus + auxilios;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() =>
+          router.push({
+            pathname: "/(tabs)/colaborador-detalhe",
+            params: { cpf: item.cpf },
+          })
+        }
+      >
+        <Text style={styles.name}>{item.nome}</Text>
+        <Text style={styles.role}>Cargo: {item.cargo}</Text>
+        <Text style={styles.salary}>
+          Ganhos Totais: R$ {totalGanhos.toFixed(2)}
+        </Text>
+        <Text style={styles.date}>
+          Cadastrado em: {new Date(item.criadoEm ?? "").toLocaleDateString("pt-BR")}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -123,6 +133,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
     marginTop: 4,
+    fontWeight: "300",
+  },
+  salaryDetail: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 2,
   },
   date: {
     fontSize: 14,

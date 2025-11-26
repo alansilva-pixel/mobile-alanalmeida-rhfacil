@@ -1,7 +1,6 @@
-import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import api from "../../services/API";
 
 interface Cargo {
@@ -25,6 +24,7 @@ export default function CadastrarColaborador() {
   const [cargos, setCargos] = useState<Cargo[]>([]);
   const [loadingCargos, setLoadingCargos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     fetchCargos();
@@ -33,7 +33,7 @@ export default function CadastrarColaborador() {
   async function fetchCargos() {
     setLoadingCargos(true);
     try {
-      const res = await api.get("/lambdaCargos"); // use /lambdaCargos se sua rota for essa
+      const res = await api.get("/lambdaCargos");
       setCargos(res.data || []);
     } catch (err) {
       console.error("Erro ao buscar cargos:", err);
@@ -56,6 +56,31 @@ export default function CadastrarColaborador() {
     resto = (soma * 10) % 11;
     if (resto === 10 || resto === 11) resto = 0;
     return resto === parseInt(cpf.charAt(10));
+  }
+
+  function formatarData(texto: string) {
+    const numeros = texto.replace(/\D/g, "");
+
+    // Aplica a máscara DD/MM/AAAA
+    if (numeros.length <= 2) {
+      return numeros;
+    } else if (numeros.length <= 4) {
+      return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+    } else {
+      return `${numeros.slice(0, 2)}/${numeros.slice(2, 4)}/${numeros.slice(4, 8)}`;
+    }
+  }
+
+  function converterDataParaISO(dataBR: string): string {
+    // Converte DD/MM/AAAA para AAAA-MM-DD
+    const numeros = dataBR.replace(/\D/g, "");
+    if (numeros.length === 8) {
+      const dia = numeros.slice(0, 2);
+      const mes = numeros.slice(2, 4);
+      const ano = numeros.slice(4, 8);
+      return `${ano}-${mes}-${dia}`;
+    }
+    return "";
   }
 
   async function escolherFoto() {
@@ -89,10 +114,13 @@ export default function CadastrarColaborador() {
 
     setSubmitting(true);
     try {
+      // Converte a data de DD/MM/AAAA para AAAA-MM-DD
+      const nascimentoISO = converterDataParaISO(nascimento);
+
       await api.post("/colaboradores", {
         nome,
         cpf,
-        nascimento,
+        nascimento: nascimentoISO,
         pis,
         telefone,
         email,
@@ -130,7 +158,15 @@ export default function CadastrarColaborador() {
 
       <TextInput style={styles.input} placeholder="Nome" value={nome} onChangeText={setNome} placeholderTextColor={"#999"} />
       <TextInput style={styles.input} placeholder="CPF" keyboardType="numeric" value={cpf} onChangeText={setCpf} placeholderTextColor={"#999"} />
-      <TextInput style={styles.input} placeholder="Data de Nascimento (AAAA-MM-DD)" value={nascimento} onChangeText={setNascimento} placeholderTextColor={"#999"} />
+      <TextInput
+        style={styles.input}
+        placeholder="Data de Nascimento (DD/MM/AAAA)"
+        keyboardType="numeric"
+        value={nascimento}
+        onChangeText={(texto) => setNascimento(formatarData(texto))}
+        placeholderTextColor={"#999"}
+        maxLength={10}
+      />
       <TextInput style={styles.input} placeholder="PIS/PASEP" keyboardType="numeric" value={pis} onChangeText={setPis} placeholderTextColor={"#999"} />
       <TextInput style={styles.input} placeholder="Telefone" keyboardType="phone-pad" value={telefone} onChangeText={setTelefone} placeholderTextColor={"#999"} />
       <TextInput style={styles.input} placeholder="E-mail" keyboardType="email-address" value={email} onChangeText={setEmail} placeholderTextColor={"#999"} />
@@ -139,22 +175,62 @@ export default function CadastrarColaborador() {
 
       <Text style={styles.label}>Selecione o Cargo:</Text>
 
-      <View style={styles.pickerContainer}>
-        {loadingCargos ? (
-          <ActivityIndicator />
-        ) : (
-          <Picker selectedValue={cargoId} onValueChange={(value) => setCargoId(value)}>
-            <Picker.Item label="Selecione um cargo" value="" />
-            {cargos.map((cargo) => (
-              <Picker.Item
-                key={cargo.id}
-                label={`${cargo.nome} — R$ ${Number(cargo.salario ?? 0).toFixed(2)}`}
-                value={cargo.id}
+      <TouchableOpacity
+        style={styles.cargoSelector}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={cargoId ? styles.cargoSelectorText : styles.cargoSelectorPlaceholder}>
+          {cargoId
+            ? cargos.find(c => c.id === cargoId)?.nome || "Selecione um cargo"
+            : "➤ Cargos"}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Selecione um Cargo</Text>
+
+            {loadingCargos ? (
+              <ActivityIndicator size="large" color="#2563eb" />
+            ) : (
+              <FlatList
+                data={cargos}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.cargoItem}
+                    onPress={() => {
+                      setCargoId(item.id);
+                      setModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.cargoNome}>{item.nome}</Text>
+                    <Text style={styles.cargoSalario}>
+                      R$ {Number(item.salario ?? 0).toFixed(2)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>Nenhum cargo disponível</Text>
+                }
               />
-            ))}
-          </Picker>
-        )}
-      </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <TouchableOpacity style={styles.fotoButton} onPress={escolherFoto}>
         <Text style={styles.buttonText}>Selecionar Foto</Text>
@@ -180,13 +256,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
   },
-  label: { marginTop: 10, fontWeight: "bold" },
-  pickerContainer: {
+  label: { marginTop: 10, fontWeight: "bold", marginBottom: 5 },
+  cargoSelector: {
     backgroundColor: "#fff",
+    padding: 12,
     borderRadius: 8,
-    marginVertical: 5,
     borderWidth: 1,
     borderColor: "#ccc",
+    marginVertical: 5,
+  },
+  cargoSelectorText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  cargoSelectorPlaceholder: {
+    fontSize: 16,
+    color: "#999",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    width: "85%",
+    maxHeight: "70%",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1d4ed8",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  cargoItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cargoNome: {
+    fontSize: 16,
+    color: "#333",
+    fontWeight: "500",
+    flex: 1,
+  },
+  cargoSalario: {
+    fontSize: 15,
+    color: "#2563eb",
+    fontWeight: "600",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#999",
+    marginTop: 20,
+  },
+  modalCloseButton: {
+    backgroundColor: "#e5e7eb",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  modalCloseText: {
+    color: "#333",
+    textAlign: "center",
+    fontWeight: "600",
   },
   fotoButton: {
     backgroundColor: "#2563eb",
